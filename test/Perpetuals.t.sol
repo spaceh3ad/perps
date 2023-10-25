@@ -5,51 +5,61 @@ import {Test, console2} from "forge-std/Test.sol";
 import "../src/lib/Library.sol";
 
 import {Perpetuals} from "../src/Perpetuals.sol";
-import {LiquidityPool} from "../src/LiquidityPool.sol";
+import {LiquidityProvider} from "../src/LiquidityProvider.sol";
 
 contract PerpetualsTest is Test {
-    LiquidityPool lp;
-    Perpetuals perp;
+    Perpetuals public perp;
 
     address alice = address(521);
 
     function setUp() public {
-        lp = new LiquidityPool();
-        perp = new Perpetuals(address(lp));
+        perp = new Perpetuals();
     }
 
-    function test_getPrice() public {
-        uint256 price = Utils.getPrice();
-        console2.log(price);
-    }
-
-    function test_openPosition() public {
-        uint256 amount = 400 * 10 ** 6; // amount of usdc
-        deal(address(USDC), alice, amount);
+    function _openPosition(
+        uint256 _amount,
+        uint256 _psize
+    ) internal returns (uint256, uint256) {
+        deal(address(usdc), alice, _amount);
         vm.startPrank(alice);
-        USDC.approve(address(lp), amount);
-        console2.log("block no before roll:", block.number);
-        lp.addLiquidity(400 * 10 ** 6);
-        perp.openPosition(1 ether, true);
+        usdc.approve(address(perp), _amount);
+        perp.addLiquidity(_amount);
+        return perp.openPosition(_psize, true);
+    }
 
-        console2.log("block no after roll:", block.number);
+    function wrappOpenPosition(uint256 _amount, uint256 _psize) public {
+        _openPosition(_amount, _psize);
+    }
 
-        (
-            address owner,
-            uint256 size,
-            uint256 entryPrice,
-            uint256 liquidationPrice,
-            uint256 lastUpdated,
-            bool directions
-        ) = perp.positionInfo(1);
-
-        uint256 _liquidationPrice = Utils.liquidationPrice(
-            1 ether,
-            entryPrice,
-            true,
-            400 * 10 ** 6
+    function test_fuzzOpenPosition(uint256 _collateral, uint256 _psize) public {
+        vm.assume(
+            _collateral >= MIN_COLLATERAL && // min 5 USDC collateral
+                _psize >= MIN_POSITION && // MIN 0.0001 BTC
+                _psize <= MAX_POSITION // MAX 500_000 BTC
         );
+        uint256 _entryPrice = 28000 * 10 ** usdc.decimals();
 
-        console2.log(_liquidationPrice);
+        uint256 leverage = (
+            ((_entryPrice * _psize * MAX_LEVERAGE) / _collateral)
+        ) / 10 ** BTC.decimals();
+
+        if (leverage > MAX_LEVERAGE) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    MaxLeverageError.selector,
+                    MAX_LEVERAGE,
+                    leverage
+                )
+            );
+        } else if (leverage < MIN_LEVERAGE) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    MinLeverageError.selector,
+                    MIN_LEVERAGE,
+                    leverage
+                )
+            );
+        }
+        this.wrappOpenPosition(_collateral, _psize);
     }
 }

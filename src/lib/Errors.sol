@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.20;
 
-error InvalidCollateralToken();
-error InsufficientCollateral(uint256 collateral, uint256 positionSize);
+///////// Perpetual Errors /////////
+error MaxLeverageError(uint256 maxLeverage, uint256 leverage);
+error MinLeverageError(uint256 minLeverage, uint256 leverage);
 error InvalidPosition(uint256 positionId);
+error PositionSizeError(uint256 size);
+
+///////// Liquidity Provider Errors /////////
+error PermissionDenied();
+error InsufficientLiquidity(uint256 liquidity);
