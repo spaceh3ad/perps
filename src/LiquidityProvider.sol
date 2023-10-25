@@ -43,4 +43,12 @@ contract LiquidityProvider {
         liquidityProvided[_account].free += _amount;
         liquidityProvided[_account].locked -= _amount;
     }
+
+    // View functions
+    function getPrice() public view returns (uint256 _price) {
+        (uint160 sqrtPriceX96, , , , , , ) = pool.slot0();
+        uint256 price = (uint256(sqrtPriceX96) ** 2 * 10 ** BTC.decimals()) >>
+            (96 * 2);
+        return price;
+    }
 }
