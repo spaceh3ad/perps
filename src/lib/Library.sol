@@ -51,10 +51,23 @@ function getLeverage(
 }
 
 function getPnL(
-    uint256 _xPrice,
-    uint256 _yPrice,
-    uint256 _psize
-) view returns (int256 _pnl) {
-    int256 _decimals = int256(10 ** usdc.decimals());
-    _pnl = ((int256(_xPrice) - int256(_yPrice)) * int256(_psize)) / _decimals;
+    uint256 _entryPrice,
+    uint256 _exitPrice,
+    uint256 _psize,
+    bool _directions // true for long, false for short
+) view returns (int256 _profitLoss) {
+    int256 _decimals = int256(10 ** btc.decimals());
+    int256 xPrice;
+    int256 yPrice;
+
+    if (_directions) {
+        // long
+        xPrice = int256(_exitPrice);
+        yPrice = int256(_entryPrice);
+    } else {
+        // short
+        xPrice = int256(_entryPrice);
+        yPrice = int256(_exitPrice);
+    }
+    _profitLoss = ((xPrice - yPrice) * int256(_psize)) / _decimals;
 }

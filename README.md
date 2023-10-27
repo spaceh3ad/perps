@@ -21,17 +21,18 @@ The Perpetuals consists of 3 main contracts:
 #### PositionManager
 1. User open position
 2. User can increase the position size
-3. User can add more liquidity
-
+3. User can increase liquidity for the postition
+4. User can close position
+5. If the postition is insolvent it can be liquidated
 
 
 #### Actors
 - Liquidity providers - users can provide liquidity(collateral) to protocol to open position against
-
-- Keeper/Any user can liqudidate the loan if underwater
-- What are the known risks/issues?
+- Users can open postions and manage them
+- Keeper/Any user can liqudidate the insolvent loan
 - Any pertinent formulas used.
 
 
 #### Known issues
-No real swaps to BTC
+- No way for lovering the collateral/size in the position
+- No real swaps to BTC/USDC

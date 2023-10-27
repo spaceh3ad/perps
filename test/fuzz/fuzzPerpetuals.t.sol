@@ -2,10 +2,10 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import "../src/lib/Library.sol";
+import "../../src/lib/Library.sol";
 
-import {Perpetuals} from "../src/Perpetuals.sol";
-import {LiquidityProvider} from "../src/LiquidityProvider.sol";
+import {Perpetuals} from "../../src/Perpetuals.sol";
+import {LiquidityProvider} from "../../src/LiquidityProvider.sol";
 
 contract PerpetualsTest is Test {
     Perpetuals public perp;

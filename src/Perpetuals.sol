@@ -44,24 +44,15 @@ contract Perpetuals is LiquidityProvider, PositionManager {
     function closePosition(
         uint256 _positionId
     ) public isValidPosition(_positionId) {
-        int256 _profitLoss = 0;
         uint256 _price = getPrice();
 
-        if (positionInfo[_positionId].directions) {
-            // long
-            _profitLoss = getPnL(
-                _price,
-                positionInfo[_positionId].entryPrice,
-                positionInfo[_positionId].size
-            );
-        } else {
-            // short
-            _profitLoss = getPnL(
-                positionInfo[_positionId].entryPrice,
-                _price,
-                positionInfo[_positionId].size
-            );
-        }
+        int256 _profitLoss = getPnL(
+            positionInfo[_positionId].entryPrice,
+            _price,
+            positionInfo[_positionId].size,
+            positionInfo[_positionId].directions
+        );
+
         if (
             _profitLoss < 0 &&
             (positionInfo[_positionId].collateral * 1050) / 1000 <
