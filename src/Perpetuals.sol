@@ -12,12 +12,11 @@ contract Perpetuals is LiquidityProvider, PositionManager {
 
     function openPosition(
         uint256 _psize,
-        bool _direction
+        bool _direction // true for long, false for short
     ) public isAlowedSize(_psize) returns (uint256 _entryPrice, uint256 _id) {
         uint256 _collateral = liquidityProvided[msg.sender].free;
         _entryPrice = 28000 * 10 ** usdc.decimals();
         // _entryPrice = getPrice();
-
         _lockLiquidty(msg.sender, _collateral);
         _id = _addPosition(
             msg.sender,
@@ -27,31 +26,55 @@ contract Perpetuals is LiquidityProvider, PositionManager {
             _direction
         );
 
-        return (_entryPrice, _idCounter);
+        return (_entryPrice, _id);
     }
 
-    function increasePosition(
+    function increasePositionSize(uint256 _id, uint256 _psize) external {
+        _increasePositionSize(_id, _psize);
+    }
+
+    function increasePositionCollateral(
         uint256 _id,
-        uint256 _psize,
-        bool _lockedCollateral
+        uint256 _collateral
     ) external {
-        console2.log(msg.sender);
-        console2.log(positionInfo[_id].owner);
-        console2.log(_id);
-        if (_lockedCollateral) {
-            // _increasePositionCollateral(_id, _psize);
+        _addLiquidity(msg.sender, _collateral);
+        _increasePositionCollateral(_id, _collateral);
+    }
+
+    function closePosition(
+        uint256 _positionId
+    ) public isValidPosition(_positionId) {
+        int256 _profitLoss = 0;
+        uint256 _price = getPrice();
+
+        if (positionInfo[_positionId].directions) {
+            // long
+            _profitLoss = getPnL(
+                _price,
+                positionInfo[_positionId].entryPrice,
+                positionInfo[_positionId].size
+            );
         } else {
-            _increasePositionSize(_id, _psize);
+            // short
+            _profitLoss = getPnL(
+                positionInfo[_positionId].entryPrice,
+                _price,
+                positionInfo[_positionId].size
+            );
         }
-    }
-
-    function closePosition(uint256 _positionId) public {
-        _closePosition(_positionId);
-    }
-
-    function _liquidatePosition(uint256 _positionId) internal {
-        // TODO: liquidate position
-        // _positions.remove(_positionId);
+        if (
+            _profitLoss < 0 &&
+            (positionInfo[_positionId].collateral * 1050) / 1000 <
+            uint256(-_profitLoss)
+        ) {
+            _liquidatePosition(_positionId, msg.sender);
+        } else if (
+            (_profitLoss < 0 &&
+                (positionInfo[_positionId].collateral * 1050) / 1000 >=
+                uint256(-_profitLoss)) || _profitLoss > 0
+        ) {
+            _closePosition(_positionId, _profitLoss);
+        }
     }
 
     function liquidationPrice(
@@ -60,7 +83,7 @@ contract Perpetuals is LiquidityProvider, PositionManager {
         bool direction, // true for long, false for short
         uint256 collateral // usdc collateral
     ) public view returns (uint256 _liquidationPrice) {
-        uint256 borrowedAmount = (size * entryPrice) / 10 ** BTC.decimals();
+        uint256 borrowedAmount = (size * entryPrice) / 10 ** btc.decimals();
         uint256 debt = 0;
         if (direction) {
             // long
@@ -70,6 +93,6 @@ contract Perpetuals is LiquidityProvider, PositionManager {
             debt = borrowedAmount + ((collateral * 1050) / 1000);
         }
         _liquidationPrice = (((borrowedAmount - ((collateral * 1050) / 1000)) /
-            size) * 10 ** BTC.decimals());
+            size) * 10 ** btc.decimals());
     }
 }

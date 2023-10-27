@@ -25,7 +25,7 @@ uint256 constant MAX_POSITION = 50000000000000; // 500_000 btc
 // liquidation threshold
 uint256 constant LIQUIDATION_FEE = 5000; // 5%
 
-IERC20 constant BTC = IERC20(BTC_TOKEN);
+IERC20 constant btc = IERC20(BTC_TOKEN);
 IERC20 constant usdc = IERC20(USDC_TOKEN);
 LiquidityPool constant pool = LiquidityPool(POOL_ADDRES);
 
@@ -33,9 +33,28 @@ struct Position {
     address owner;
     uint256 size; // btc amount that we buy
     uint256 entryPrice;
+    uint256 collateral;
     bool directions; // true for long, false for short
 }
 struct Liquidity {
     uint256 free;
     uint256 locked;
+}
+
+function getLeverage(
+    uint256 _entryPrice,
+    uint256 _psize,
+    uint256 _collateral
+) view returns (uint256 _leverage) {
+    _leverage = ((((_entryPrice * _psize) / _collateral)) /
+        10 ** usdc.decimals());
+}
+
+function getPnL(
+    uint256 _xPrice,
+    uint256 _yPrice,
+    uint256 _psize
+) view returns (int256 _pnl) {
+    int256 _decimals = int256(10 ** usdc.decimals());
+    _pnl = ((int256(_xPrice) - int256(_yPrice)) * int256(_psize)) / _decimals;
 }

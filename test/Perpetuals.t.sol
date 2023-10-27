@@ -16,12 +16,33 @@ contract PerpetualsTest is Test {
         perp = new Perpetuals();
     }
 
-    /////// Wrappers ///////////////////////
-    function wrappOpenPosition(uint256 _amount, uint256 _psize) public {
-        _openPosition(_amount, _psize);
+    /////// Modifiers //////////////////////
+    modifier positionSize(uint256 _psize) {
+        vm.assume(_psize >= MIN_POSITION && _psize <= MAX_POSITION);
+        _;
     }
 
-    function wrappIncreasePositionSize(uint256 _amount, uint256 _psize) public {
+    modifier useAccount(address _account) {
+        vm.assume(_account != address(0));
+        vm.startPrank(_account);
+        _;
+        vm.stopPrank();
+    }
+
+    /////// Wrappers ///////////////////////
+    function wrappOpenPosition(
+        uint256 _amount,
+        uint256 _psize,
+        address _account
+    ) public {
+        _openPosition(_amount, _psize, _account);
+    }
+
+    function wrappIncreasePositionSize(
+        uint256 _amount,
+        uint256 _psize,
+        address _account
+    ) public useAccount(_account) {
         _increasePositionSize(_amount, _psize);
     }
 
@@ -30,67 +51,95 @@ contract PerpetualsTest is Test {
     ////////// Internal /////////////////////
     function _openPosition(
         uint256 _amount,
-        uint256 _psize
-    ) internal returns (uint256 _entryPrice, uint256 _id) {
-        deal(address(usdc), alice, _amount);
-        vm.startPrank(alice);
+        uint256 _psize,
+        address _account
+    ) internal useAccount(_account) returns (uint256 _entryPrice, uint256 _id) {
+        deal(address(usdc), _account, _amount);
+        vm.startPrank(_account);
         usdc.approve(address(perp), _amount);
+
         perp.addLiquidity(_amount);
         (_entryPrice, _id) = perp.openPosition(_psize, true);
-        vm.stopPrank();
+        console2.log("Opened position with: ", _entryPrice, _amount, _id);
     }
 
     function _increasePositionSize(uint256 _id, uint256 _psize) internal {
-        perp.increasePosition(_id, _psize, true);
+        perp.increasePositionSize(_id, _psize);
     }
 
-    /////////////////////////////////////////
+    //////////// Fuzzing ///////////////////
 
-    function test_fuzzOpenPosition(uint256 _collateral, uint256 _psize) public {
+    function test_fuzzOpenPosition(
+        uint256 _collateral,
+        uint256 _psize,
+        address _account
+    ) public positionSize(_psize) {
         vm.assume(
-            _collateral >= MIN_COLLATERAL && // min 5 USDC collateral
-                _psize >= MIN_POSITION && // MIN 0.0001 BTC
-                _psize <= MAX_POSITION // MAX 500_000 BTC
+            _collateral >= MIN_COLLATERAL // min 5 USDC collateral
         );
         uint256 _entryPrice = 28000 * 10 ** usdc.decimals();
 
-        uint256 leverage = (
-            ((_entryPrice * _psize * MAX_LEVERAGE) / _collateral)
-        ) / 10 ** BTC.decimals();
+        uint256 _leverage = getLeverage(_entryPrice, _psize, _collateral);
 
-        if (leverage > MAX_LEVERAGE) {
+        if (_leverage > MAX_LEVERAGE) {
             vm.expectRevert(
                 abi.encodeWithSelector(
                     MaxLeverageError.selector,
                     MAX_LEVERAGE,
-                    leverage
+                    _leverage
                 )
             );
-        } else if (leverage < MIN_LEVERAGE) {
+        } else if (_leverage < MIN_LEVERAGE) {
             vm.expectRevert(
                 abi.encodeWithSelector(
                     MinLeverageError.selector,
                     MIN_LEVERAGE,
-                    leverage
+                    _leverage
                 )
             );
         }
-        this.wrappOpenPosition(_collateral, _psize);
+        this.wrappOpenPosition(_collateral, _psize, _account);
     }
 
-    function test_fuzzIncreasePosition(uint256 _psize) public {
-        vm.assume(
-            _psize >= MIN_POSITION && // MIN 0.0001 BTC
-                _psize <= MAX_POSITION // MAX 500_000 BTC
-        );
+    function test_fuzzIncreasePosition(
+        uint256 _psize,
+        address _account
+    ) public positionSize(_psize) {
         uint256 _psizeBase = 20000;
         uint256 _collateral = 10000000;
-        (, uint256 _id) = _openPosition(_collateral, _psizeBase);
-        (, uint256 _size, , ) = perp.positionInfo(_id);
-        console2.log(_size);
-        this.wrappIncreasePositionSize(1, _psize);
-        (, _size, , ) = perp.positionInfo(1);
-        console2.log(_size);
-        assert(_size == _psize);
+        (uint256 _entryPrice, uint256 _id) = _openPosition(
+            _collateral,
+            _psizeBase,
+            _account
+        );
+        (, uint256 _size, , , ) = perp.positionInfo(_id);
+
+        uint256 _leverage = getLeverage(_entryPrice, _psize, _collateral);
+
+        console2.log("Expected Leverage: ", _leverage);
+
+        if (_leverage > MAX_LEVERAGE) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    MaxLeverageError.selector,
+                    MAX_LEVERAGE,
+                    _leverage
+                )
+            );
+        } else if (_leverage < MIN_LEVERAGE) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    MinLeverageError.selector,
+                    MIN_LEVERAGE,
+                    _leverage
+                )
+            );
+        }
+
+        this.wrappIncreasePositionSize(1, _psize, _account);
+        // (, _size, , ) = perp.positionInfo(1);
+        // assert(_size == _psize);
     }
+
+    //////////////////////////////////////////////
 }

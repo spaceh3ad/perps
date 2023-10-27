@@ -16,6 +16,11 @@ contract PositionManager is LiquidityProvider {
     /// @dev mapping of _positionId to Position
     mapping(uint256 => Position) public positionInfo;
 
+    modifier increaseCounter() {
+        _;
+        _idCounter += 1;
+    }
+
     /// @dev allow posiztion size in range [MIN_POSITION, MAX_POSITION]
     modifier isAlowedSize(uint256 _psize) {
         if (_psize < MIN_POSITION || _psize > MAX_POSITION) {
@@ -28,6 +33,8 @@ contract PositionManager is LiquidityProvider {
     modifier isValidPosition(uint256 _positionId) {
         if (!_positions.contains(_positionId)) {
             revert InvalidPosition(_positionId);
+        } else if (positionInfo[_positionId].owner != msg.sender) {
+            revert PermissionDenied();
         }
         _;
     }
@@ -38,11 +45,7 @@ contract PositionManager is LiquidityProvider {
         uint256 _collateral,
         uint256 _entryPrice
     ) {
-        console2.log(_psize, _collateral, _entryPrice);
-        uint256 _leverage = (
-            ((_entryPrice * _psize * MAX_LEVERAGE) / _collateral)
-        ) / 10 ** BTC.decimals();
-
+        uint256 _leverage = getLeverage(_entryPrice, _psize, _collateral);
         if (_leverage > MAX_LEVERAGE) {
             revert MaxLeverageError(MAX_LEVERAGE, _leverage);
         } else if (_leverage < MIN_LEVERAGE) {
@@ -60,21 +63,20 @@ contract PositionManager is LiquidityProvider {
     )
         internal
         isValidLeverage(_psize, _collateral, _entryPrice)
+        increaseCounter
         returns (uint256)
     {
-        uint256 _id = _idCounter;
-
-        positionInfo[_id] = Position({
+        positionInfo[_idCounter] = Position({
             owner: _owner,
             size: _psize,
             entryPrice: _entryPrice,
+            collateral: _collateral,
             directions: _direction
         });
 
-        _positions.add(_id);
-        _idCounter += 1;
+        _positions.add(_idCounter);
 
-        return _id;
+        return _idCounter;
     }
 
     function _increasePositionSize(
@@ -82,35 +84,80 @@ contract PositionManager is LiquidityProvider {
         uint256 _psize
     )
         internal
-        isAlowedSize(_psize + positionInfo[_id].size)
+        isAlowedSize(_psize)
         isValidLeverage(
             _psize + positionInfo[_id].size,
-            liquidityProvided[msg.sender].free,
+            positionInfo[_id].collateral,
             positionInfo[_id].entryPrice
         )
         isValidPosition(_id)
     {
         Position storage position = positionInfo[_id];
 
-        // if (_free < _collateral) {
-        //     revert InsufficientLiquidity(_collateral);
-        // }
-
-        if (position.owner != msg.sender) {
-            revert PermissionDenied();
-        }
-
         position.size += _psize;
     }
 
-    function _increasePositionCollateral() internal {}
+    function _increasePositionCollateral(
+        uint256 _id,
+        uint256 _collateral
+    )
+        internal
+        isValidPosition(_id)
+        isValidLeverage(
+            positionInfo[_id].size,
+            positionInfo[_id].collateral + _collateral,
+            positionInfo[_id].entryPrice
+        )
+    {
+        Position storage position = positionInfo[_id];
 
-    function _closePosition(uint256 _positionId) internal {
-        if (_positions.contains(_positionId)) {
-            revert InvalidPosition(_positionId);
+        liquidityProvided[positionInfo[_id].owner].free -= _collateral;
+        liquidityProvided[positionInfo[_id].owner].locked += _collateral;
+
+        position.collateral += _collateral;
+    }
+
+    function _closePosition(uint256 _positionId, int256 _profitLoss) internal {
+        if (_profitLoss > 0) {
+            // profit
+            _unlockLiquidity(
+                positionInfo[_positionId].owner,
+                positionInfo[_positionId].collateral
+            );
+            liquidityProvided[positionInfo[_positionId].owner].free += uint256(
+                _profitLoss
+            );
+        } else {
+            // loss
+            _unlockLiquidity(
+                positionInfo[_positionId].owner,
+                positionInfo[_positionId].collateral - uint256(-_profitLoss)
+            );
         }
-        // TODO: close position
-        // calc profit/loss
+
+        _positions.remove(_positionId);
+        delete positionInfo[_positionId];
+    }
+
+    function _liquidatePosition(
+        uint256 _positionId,
+        address _liquidator
+    ) internal {
+        uint256 _collateral = positionInfo[_positionId].collateral;
+
+        // send liquidator 2.5% of collateral
+        liquidityProvided[_liquidator].free +=
+            uint256(_collateral * 1025) /
+            1000;
+
+        // protocol fee
+        liquidityProvided[address(this)].free +=
+            uint256(_collateral * 1025) /
+            1000;
+
+        liquidityProvided[positionInfo[_positionId].owner]
+            .locked -= positionInfo[_positionId].collateral;
+
         _positions.remove(_positionId);
     }
 }
