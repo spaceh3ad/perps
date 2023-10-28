@@ -167,4 +167,25 @@ contract PositionManager is LiquidityProvider {
         _positions.remove(_positionId);
         delete positionInfo[_positionId];
     }
+
+    function isInsolventPosition(uint256 _id) external view returns (bool) {
+        uint256 currentPrice = getPrice();
+
+        uint256 lp = liquidationPrice(
+            positionInfo[_id].size,
+            positionInfo[_id].entryPrice,
+            positionInfo[_id].direction,
+            positionInfo[_id].collateral
+        );
+
+        if (
+            (positionInfo[_id].direction == Direction.LONG &&
+                currentPrice <= lp) ||
+            (positionInfo[_id].direction == Direction.SHORT &&
+                currentPrice >= lp)
+        ) {
+            return true;
+        }
+        return false;
+    }
 }

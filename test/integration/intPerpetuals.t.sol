@@ -288,5 +288,33 @@ contract PerpetualsTest is Test {
             _liquidityAfter ==
                 uint256(int256(collateral) + _pnl) - protocolFee(collateral)
         );
+        // END TEST
+
+        // TEST: if the position is invsolvent closing it would liquidate the position
+        (, _id) = _openPosition(collateral, 10 * psize, alice, Direction.SHORT);
+        _pnl = getPnL(entryPrice, perp.getPrice(), psize, Direction.SHORT);
+        this.wrapClosePosition(_id, alice);
+        (_liquidityAfter, ) = perp.liquidityProvided(alice);
+        console2.log(_liquidityAfter);
+        assert(_liquidityAfter == 0);
+    }
+
+    function test_insolventPositions() public {
+        // TEST: should return empty array if there are no insolvent positions
+        (, uint256 _id) = _openPosition(
+            collateral,
+            psize,
+            alice,
+            Direction.LONG
+        );
+        bool isInsvolvent = perp.isInsolventPosition(_id);
+        assert(isInsvolvent == false);
+        // END TEST
+
+        // TEST: should return array with one position if there is one insolvent position
+        (, _id) = _openPosition(collateral, 3 * psize, alice, Direction.SHORT);
+        isInsvolvent = perp.isInsolventPosition(_id);
+        assert(isInsvolvent == true);
+        // END TEST
     }
 }

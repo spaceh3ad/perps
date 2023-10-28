@@ -80,3 +80,21 @@ function getPnL(
 function protocolFee(uint256 _PnL) pure returns (uint256) {
     return uint256(_PnL * 25) / 1000;
 }
+
+function liquidationPrice(
+    uint256 size, // btc position size
+    uint256 entryPrice, // btc price at entry
+    Direction direction, // true for long, false for short
+    uint256 collateral // usdc collateral
+) view returns (uint256 _liquidationPrice) {
+    uint256 borrowedAmount = (size * entryPrice) / 10 ** btc.decimals();
+    if (direction == Direction.LONG) {
+        // long
+        _liquidationPrice = (((borrowedAmount - ((collateral * 1050) / 1000)) /
+            size) * 10 ** btc.decimals());
+    } else {
+        // short
+        _liquidationPrice = (((borrowedAmount + ((collateral * 1050) / 1000)) /
+            size) * 10 ** btc.decimals());
+    }
+}

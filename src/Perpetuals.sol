@@ -63,23 +63,4 @@ contract Perpetuals is LiquidityProvider, PositionManager {
             _closePosition(_positionId, _profitLoss);
         }
     }
-
-    function liquidationPrice(
-        uint256 size, // btc position size
-        uint256 entryPrice, // btc price at entry
-        bool direction, // true for long, false for short
-        uint256 collateral // usdc collateral
-    ) public view returns (uint256 _liquidationPrice) {
-        uint256 borrowedAmount = (size * entryPrice) / 10 ** btc.decimals();
-        uint256 debt = 0;
-        if (direction) {
-            // long
-            debt = borrowedAmount - ((collateral * 1050) / 1000);
-        } else {
-            // short
-            debt = borrowedAmount + ((collateral * 1050) / 1000);
-        }
-        _liquidationPrice = (((borrowedAmount - ((collateral * 1050) / 1000)) /
-            size) * 10 ** btc.decimals());
-    }
 }
