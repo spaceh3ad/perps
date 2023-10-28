@@ -12,10 +12,10 @@ contract Perpetuals is LiquidityProvider, PositionManager {
 
     function openPosition(
         uint256 _psize,
-        bool _direction // true for long, false for short
+        Direction _direction // true for long, false for short
     ) public isAlowedSize(_psize) returns (uint256 _entryPrice, uint256 _id) {
         uint256 _collateral = liquidityProvided[msg.sender].free;
-        _entryPrice = 28000 * 10 ** usdc.decimals();
+        _entryPrice = 31_000 * 10 ** usdc.decimals();
         // _entryPrice = getPrice();
         _lockLiquidty(msg.sender, _collateral);
         _id = _addPosition(
@@ -50,7 +50,7 @@ contract Perpetuals is LiquidityProvider, PositionManager {
             positionInfo[_positionId].entryPrice,
             _price,
             positionInfo[_positionId].size,
-            positionInfo[_positionId].directions
+            positionInfo[_positionId].direction
         );
 
         if (
@@ -59,11 +59,7 @@ contract Perpetuals is LiquidityProvider, PositionManager {
             uint256(-_profitLoss)
         ) {
             _liquidatePosition(_positionId, msg.sender);
-        } else if (
-            (_profitLoss < 0 &&
-                (positionInfo[_positionId].collateral * 1050) / 1000 >=
-                uint256(-_profitLoss)) || _profitLoss > 0
-        ) {
+        } else {
             _closePosition(_positionId, _profitLoss);
         }
     }

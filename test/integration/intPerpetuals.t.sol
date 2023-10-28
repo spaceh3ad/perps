@@ -13,7 +13,7 @@ contract PerpetualsTest is Test {
     address alice = address(123);
     address bob = address(321);
 
-    uint256 entryPrice = 28000 * 10 ** usdc.decimals(); // 28000 USDC
+    uint256 entryPrice = 31_000 * 10 ** usdc.decimals(); // 28000 USDC
     uint256 collateral = 100 * 10 ** usdc.decimals(); // 100 USDC
     uint256 psizeBase = 2 * 10 ** (btc.decimals() - 2); // 0.02 BTC
     uint256 psize = 1 * 10 ** (btc.decimals() - 1); // 0.1 BTC
@@ -41,7 +41,7 @@ contract PerpetualsTest is Test {
         uint256 _amount,
         uint256 _psize,
         address _account,
-        bool _direction
+        Direction _direction
     ) public {
         _openPosition(_amount, _psize, _account, _direction);
     }
@@ -55,14 +55,18 @@ contract PerpetualsTest is Test {
         _increasePosition(_account, _id, _collateral, _psize);
     }
 
-    function wrapGeneric(
-        bytes memory _data,
+    function wrapRemoveCollateral(
+        uint256 _collateral,
         address _account
-    ) public useAccount(_account) returns (bytes memory) {
-        (bool _success, bytes memory _rdata) = address(perp).call(_data);
-        if (!_success) {
-            return _rdata;
-        }
+    ) public useAccount(_account) {
+        perp.removeLiquidity(_collateral);
+    }
+
+    function wrapClosePosition(
+        uint256 _id,
+        address _account
+    ) public useAccount(_account) {
+        perp.closePosition(_id);
     }
 
     /////////////////////////////////////////
@@ -72,7 +76,7 @@ contract PerpetualsTest is Test {
         uint256 _amount,
         uint256 _psize,
         address _account,
-        bool _direction
+        Direction _direction
     ) internal useAccount(_account) returns (uint256 _entryPrice, uint256 _id) {
         deal(address(usdc), _account, _amount);
         usdc.approve(address(perp), _amount);
@@ -100,16 +104,25 @@ contract PerpetualsTest is Test {
 
     function test_openPosition() public {
         // TEST: should allow to open position for long
-        (, uint256 _id) = _openPosition(collateral, psize, alice, true);
-        (address _owner, uint256 _size, , , bool _direction) = perp
+        (, uint256 _id) = _openPosition(
+            collateral,
+            psize,
+            alice,
+            Direction.LONG
+        );
+        (address _owner, uint256 _size, , , Direction _direction) = perp
             .positionInfo(_id);
-        assert(_owner == alice && _size == psize && _direction == true);
+        assert(
+            _owner == alice && _size == psize && _direction == Direction.LONG
+        );
         // END TEST
 
         // TEST: should allow to open position for short
-        (, _id) = _openPosition(collateral, psize, alice, false);
+        (, _id) = _openPosition(collateral, psize, alice, Direction.SHORT);
         (_owner, _size, , , _direction) = perp.positionInfo(_id);
-        assert(_owner == alice && _size == psize && _direction == false);
+        assert(
+            _owner == alice && _size == psize && _direction == Direction.SHORT
+        );
         // END TEST
 
         // TEST: should not allow to open position with too small collateral
@@ -120,7 +133,12 @@ contract PerpetualsTest is Test {
                 _tooLessCollateral
             )
         );
-        this.wrappOpenPosition(_tooLessCollateral, psize, alice, true);
+        this.wrappOpenPosition(
+            _tooLessCollateral,
+            psize,
+            alice,
+            Direction.LONG
+        );
         // END TEST
 
         // TEST: should not allow to open position with leverage > MAX_LEVERAGE
@@ -135,7 +153,7 @@ contract PerpetualsTest is Test {
                 leverage
             )
         );
-        this.wrappOpenPosition(collateral, psize, alice, true);
+        this.wrappOpenPosition(collateral, psize, alice, Direction.LONG);
         // END TEST
 
         // TEST: should not allow to open position with leverage < MIN_LEVERAGE
@@ -149,14 +167,18 @@ contract PerpetualsTest is Test {
                 leverage
             )
         );
-        this.wrappOpenPosition(collateral, psize, alice, true);
+        this.wrappOpenPosition(collateral, psize, alice, Direction.LONG);
         // END TEST
     }
 
     function test_increasePosition() public {
         // TEST: should allow to increase position size
-        console2.log("TEST: should allow to increase position size");
-        (, uint256 _id) = _openPosition(collateral, psizeBase, alice, true);
+        (, uint256 _id) = _openPosition(
+            collateral,
+            psizeBase,
+            alice,
+            Direction.LONG
+        );
 
         _increasePosition(alice, _id, psize, 0);
         (, uint256 _cumPsize, , , ) = perp.positionInfo(_id);
@@ -164,8 +186,6 @@ contract PerpetualsTest is Test {
         // END TEST
 
         // TEST: should allow to increase position collateral
-        console2.log("TEST: should allow to increase position collateral");
-
         leverage = getLeverage(entryPrice, _cumPsize, collateral);
         deal(address(usdc), alice, collateral);
         usdc.approve(address(perp), collateral);
@@ -184,17 +204,13 @@ contract PerpetualsTest is Test {
         // END TEST
 
         // TEST: should not allow to increase position collateral to reach leverage < MIN_LEVERAGE
-        console2.log(
-            "TEST: should not allow to increase position collateral to reach leverage < MIN_LEVERAGE"
-        );
         uint256 _tooMuchCollateral = 10_000 * 10 ** usdc.decimals();
-        (, _id) = _openPosition(collateral, psizeBase, bob, true);
+        (, _id) = _openPosition(collateral, psizeBase, bob, Direction.LONG);
         leverage = getLeverage(
             entryPrice,
             psizeBase,
             collateral + _tooMuchCollateral
         );
-        console2.log("Leverage: ", leverage);
         vm.expectRevert(
             abi.encodeWithSelector(
                 MinLeverageError.selector,
@@ -206,18 +222,14 @@ contract PerpetualsTest is Test {
         // END TEST
 
         // TEST: should not allow to increase position size to reach leverage > MAX_LEVERAGE
-        console2.log(
-            "TEST: should not allow to increase position size to reach leverage > MAX_LEVERAGE"
-        );
         uint256 _tooMuchPsize = 1 * 10 ** (btc.decimals()); // 1 BTC
-        (, _id) = _openPosition(collateral, psizeBase, alice, true);
+        (, _id) = _openPosition(collateral, psizeBase, alice, Direction.LONG);
 
         leverage = getLeverage(
             entryPrice,
             psizeBase + _tooMuchPsize,
             collateral
         );
-        console2.log("Leverage: ", leverage);
         vm.expectRevert(
             abi.encodeWithSelector(
                 MaxLeverageError.selector,
@@ -230,37 +242,51 @@ contract PerpetualsTest is Test {
         // END TEST
 
         // TEST: should not allow to increase someone else postion size
-        console2.log(
-            "TEST: should not allow to increase someone else postion size"
-        );
         vm.expectRevert(PermissionDenied.selector);
         this.wrappIncreasePosition(bob, _id, psize, 0);
         // END TEST
 
-        // TEST: should not be possible to remove collateral from position
-        console2.log(
-            "TEST: should not be possible to remove collateral from position"
-        );
+        // TEST: should not be possible to remove collateral from active position
         vm.expectRevert(
             abi.encodeWithSelector(InsufficientLiquidity.selector, collateral)
         );
-        // vm.startPrank(alice);
-        this.wrapGeneric(
-            abi.encodeWithSelector(perp.removeLiquidity.selector, collateral),
-            alice
-        );
-        // perp.removeLiquidity(collateral);
-        // vm.stopPrank();
+        this.wrapRemoveCollateral(collateral, alice);
+        // END TEST
     }
 
     function test_closePosition() public {
-        (, uint256 _id) = _openPosition(collateral, psize, alice, true);
-        uint256 _pnl = uint256(
-            getPnL(entryPrice, perp.getPrice(), psize, true)
+        // TEST: should allow to close postion with profit
+        (, uint256 _id) = _openPosition(
+            collateral,
+            psize,
+            alice,
+            Direction.LONG
+        );
+        int256 _pnl = getPnL(
+            entryPrice,
+            perp.getPrice(),
+            psize,
+            Direction.LONG
         );
 
-        perp.closePosition(_id);
+        this.wrapClosePosition(_id, alice);
         (uint256 _liquidityAfter, ) = perp.liquidityProvided(alice);
-        assert(_liquidityAfter == collateral + _pnl);
+        assert(
+            _liquidityAfter ==
+                uint256(int256(collateral) + _pnl) - protocolFee(uint256(_pnl))
+        );
+        // END TEST
+
+        // TEST: should allow to close position with loss
+        collateral = 5 * collateral;
+        (, _id) = _openPosition(collateral, psize, bob, Direction.SHORT);
+        _pnl = getPnL(entryPrice, perp.getPrice(), psize, Direction.SHORT);
+
+        this.wrapClosePosition(_id, bob);
+        (_liquidityAfter, ) = perp.liquidityProvided(bob);
+        assert(
+            _liquidityAfter ==
+                uint256(int256(collateral) + _pnl) - protocolFee(collateral)
+        );
     }
 }

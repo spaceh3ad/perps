@@ -59,7 +59,7 @@ contract PerpetualsTest is Test {
         usdc.approve(address(perp), _amount);
 
         perp.addLiquidity(_amount);
-        (_entryPrice, _id) = perp.openPosition(_psize, true);
+        (_entryPrice, _id) = perp.openPosition(_psize, Direction.LONG);
         console2.log("Opened position with: ", _entryPrice, _amount, _id);
     }
 

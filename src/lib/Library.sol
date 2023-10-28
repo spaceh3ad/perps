@@ -29,12 +29,17 @@ IERC20 constant btc = IERC20(BTC_TOKEN);
 IERC20 constant usdc = IERC20(USDC_TOKEN);
 LiquidityPool constant pool = LiquidityPool(POOL_ADDRES);
 
+enum Direction {
+    SHORT,
+    LONG
+}
+
 struct Position {
     address owner;
     uint256 size; // btc amount that we buy
     uint256 entryPrice;
     uint256 collateral;
-    bool directions; // true for long, false for short
+    Direction direction; // true for long, false for short
 }
 struct Liquidity {
     uint256 free;
@@ -54,13 +59,13 @@ function getPnL(
     uint256 _entryPrice,
     uint256 _exitPrice,
     uint256 _psize,
-    bool _directions // true for long, false for short
+    Direction _directions // long/short
 ) view returns (int256 _profitLoss) {
     int256 _decimals = int256(10 ** btc.decimals());
     int256 xPrice;
     int256 yPrice;
 
-    if (_directions) {
+    if (_directions == Direction.LONG) {
         // long
         xPrice = int256(_exitPrice);
         yPrice = int256(_entryPrice);
@@ -70,4 +75,8 @@ function getPnL(
         yPrice = int256(_exitPrice);
     }
     _profitLoss = ((xPrice - yPrice) * int256(_psize)) / _decimals;
+}
+
+function protocolFee(uint256 _PnL) pure returns (uint256) {
+    return uint256(_PnL * 25) / 1000;
 }

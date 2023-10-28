@@ -59,7 +59,7 @@ contract PositionManager is LiquidityProvider {
         uint256 _psize,
         uint256 _collateral,
         uint256 _entryPrice,
-        bool _direction
+        Direction _direction
     )
         internal
         isValidLeverage(_psize, _collateral, _entryPrice)
@@ -71,7 +71,7 @@ contract PositionManager is LiquidityProvider {
             size: _psize,
             entryPrice: _entryPrice,
             collateral: _collateral,
-            directions: _direction
+            direction: _direction
         });
 
         _positions.add(_idCounter);
@@ -118,25 +118,30 @@ contract PositionManager is LiquidityProvider {
     }
 
     function _closePosition(uint256 _positionId, int256 _profitLoss) internal {
+        // protocol fee
+        uint256 _pFee;
+
+        uint256 _collateral = positionInfo[_positionId].collateral;
+        address _owner = positionInfo[_positionId].owner;
+
+        _unlockLiquidity(_owner, _collateral);
+
+        // protocol fee 2.5% from profit
         if (_profitLoss > 0) {
-            // profit
-            _unlockLiquidity(
-                positionInfo[_positionId].owner,
-                positionInfo[_positionId].collateral
-            );
-            liquidityProvided[positionInfo[_positionId].owner].free += uint256(
-                _profitLoss
-            );
+            _pFee = protocolFee(uint256(_profitLoss));
+            liquidityProvided[positionInfo[_positionId].owner].free +=
+                uint256(_profitLoss) -
+                _pFee;
         } else {
-            // loss
-            _unlockLiquidity(
-                positionInfo[_positionId].owner,
-                positionInfo[_positionId].collateral - uint256(-_profitLoss)
-            );
+            _pFee = protocolFee(_collateral);
+            liquidityProvided[positionInfo[_positionId].owner].free -=
+                uint256(-_profitLoss) +
+                _pFee;
         }
 
-        _positions.remove(_positionId);
-        delete positionInfo[_positionId];
+        liquidityProvided[address(this)].free += _pFee;
+
+        _removePosition(_positionId);
     }
 
     function _liquidatePosition(
@@ -146,18 +151,20 @@ contract PositionManager is LiquidityProvider {
         uint256 _collateral = positionInfo[_positionId].collateral;
 
         // send liquidator 2.5% of collateral
-        liquidityProvided[_liquidator].free +=
-            uint256(_collateral * 1025) /
-            1000;
+        liquidityProvided[_liquidator].free += (_collateral * 25) / 1000;
 
         // protocol fee
-        liquidityProvided[address(this)].free +=
-            uint256(_collateral * 1025) /
+        liquidityProvided[address(this)].free += protocolFee(_collateral);
+
+        liquidityProvided[positionInfo[_positionId].owner].locked -=
+            (_collateral * 950) /
             1000;
 
-        liquidityProvided[positionInfo[_positionId].owner]
-            .locked -= positionInfo[_positionId].collateral;
+        _removePosition(_positionId);
+    }
 
+    function _removePosition(uint256 _positionId) internal {
         _positions.remove(_positionId);
+        delete positionInfo[_positionId];
     }
 }

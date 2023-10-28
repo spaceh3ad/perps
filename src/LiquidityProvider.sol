@@ -53,10 +53,7 @@ contract LiquidityProvider {
         liquidityProvided[_account].locked += _amount;
     }
 
-    function _unlockLiquidity(
-        address _account,
-        uint256 _amount
-    ) internal liquidityCheck(_account, _amount) {
+    function _unlockLiquidity(address _account, uint256 _amount) internal {
         liquidityProvided[_account].free += _amount;
         liquidityProvided[_account].locked -= _amount;
     }
