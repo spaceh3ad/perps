@@ -146,20 +146,22 @@ contract PositionManager is LiquidityProvider {
 
     function _liquidatePosition(
         uint256 _positionId,
-        address _liquidator
+        address _liquidator,
+        int256 _profitLoss
     ) internal {
         uint256 _collateral = positionInfo[_positionId].collateral;
 
-        // send liquidator 2.5% of collateral
-        liquidityProvided[_liquidator].free += (_collateral * 25) / 1000;
+        uint256 _protocolFee = protocolFee(_collateral);
 
         // protocol fee
-        liquidityProvided[address(this)].free += protocolFee(_collateral);
+        liquidityProvided[address(this)].free += _protocolFee;
+        // send rest of collateral to liquidator
+        liquidityProvided[_liquidator].free +=
+            _collateral -
+            (uint256(_profitLoss) + _protocolFee);
 
-        liquidityProvided[positionInfo[_positionId].owner].locked -=
-            (_collateral * 950) /
-            1000;
-
+        liquidityProvided[positionInfo[_positionId].owner]
+            .locked -= positionInfo[_positionId].collateral;
         _removePosition(_positionId);
     }
 

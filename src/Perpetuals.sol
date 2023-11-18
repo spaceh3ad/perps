@@ -58,7 +58,7 @@ contract Perpetuals is LiquidityProvider, PositionManager {
             (positionInfo[_positionId].collateral * 1050) / 1000 <
             uint256(-_profitLoss)
         ) {
-            _liquidatePosition(_positionId, msg.sender);
+            _liquidatePosition(_positionId, msg.sender, _profitLoss);
         } else {
             _closePosition(_positionId, _profitLoss);
         }
